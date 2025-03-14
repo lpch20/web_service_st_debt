@@ -7,7 +7,7 @@ const {
   getRequiroMultiple3,
 } = require("../db/stDb");
 
-const getDebtService = async (ci) => {
+const getCiService = async (ci) => {
   await setupKnexConnections();
 
   try {
@@ -173,4 +173,4 @@ const getDebtService = async (ci) => {
   }
 };
 
-module.exports = getDebtService;
+module.exports = getCiService;

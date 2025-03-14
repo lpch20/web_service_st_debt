@@ -1,114 +1,73 @@
 const {
-    setupKnexConnections,
-    closeTunnel,
-    getRequiroTest,
-    getRequiroMoratemprana,
-    getRequiroMultiple3,
-  } = require("../db/stDb");
-  
-  const getClientsFromTeledataService = async (ci) => {
-    await setupKnexConnections();
-  
-    try {
-      if (!ci) {
-        throw new Error("El campo ci está vacío o no es válido");
-      }
-  
-      const dbTest = getRequiroTest();
-      const dbMoraTemprana = getRequiroMoratemprana();
-      const dbMultiple3 = getRequiroMultiple3();
-  
-      console.log(`🔍 Buscando CI: ${ci} en las bases de datos con múltiples JOINs...`);
-  
-      // Consultar en todas las bases de datos
-      const [resultTest, resultMoraTemprana, resultMultiple3] = await Promise.all([
-        dbTest("customer")
-          .leftJoin("item_queue", "customer.id", "item_queue.idCustomer")
-          .leftJoin("queue_user", "item_queue.idQueue", "queue_user.idQueue")
-          .leftJoin("users", "queue_user.idUser", "users.id")
-          .select(
-            "customer.*",
-            "item_queue.idQueue",
-            "queue_user.idUser",
-            "users.user_name"
-          )
-          .where("customer.ci", ci)
-          .first(),
-  
-        dbMoraTemprana("customer")
-          .leftJoin("item_queue", "customer.id", "item_queue.idCustomer")
-          .leftJoin("queue_user", "item_queue.idQueue", "queue_user.idQueue")
-          .leftJoin("users", "queue_user.idUser", "users.id")
-          .select(
-            "customer.*",
-            "item_queue.idQueue",
-            "queue_user.idUser",
-            "users.user_name"
-          )
-          .where("customer.ci", ci)
-          .first(),
-  
-        dbMultiple3("customer")
-          .leftJoin("item_queue", "customer.id", "item_queue.idCustomer")
-          .leftJoin("queue_user", "item_queue.idQueue", "queue_user.idQueue")
-          .leftJoin("users", "queue_user.idUser", "users.id")
-          .select(
-            "customer.*",
-            "item_queue.idQueue",
-            "queue_user.idUser",
-            "users.user_name"
-          )
-          .where("customer.ci", ci)
-      ]);
-  
-      let finalResults = [];
-  
-      // Agregar todos los registros de requiro_multiple3 (si se obtuvieron)
-      if (Array.isArray(resultMultiple3) && resultMultiple3.length > 0) {
-        resultMultiple3.forEach((record) => {
-          finalResults.push({
-            db: "requiro_multiple3",
-            source: record.source, // Asegúrate de que exista la propiedad "source" en el registro
-            data: record,
-          });
-        });
-      }
-  
-      // Si se obtuvieron resultados en requiro_test y requiro_moratemprana, elegir el más reciente
-      if (resultTest && resultMoraTemprana) {
-        const moreRecent =
-          resultTest.created > resultMoraTemprana.created
-            ? resultTest
-            : resultMoraTemprana;
-        finalResults.push({
-          db: moreRecent === resultTest ? "requiro_test" : "requiro_moratemprana",
-          source: moreRecent.source,
-          data: moreRecent,
-        });
-      } else if (resultTest) {
-        finalResults.push({
-          db: "requiro_test",
-          source: resultTest.source,
-          data: resultTest,
-        });
-      } else if (resultMoraTemprana) {
-        finalResults.push({
-          db: "requiro_moratemprana",
-          source: resultMoraTemprana.source,
-          data: resultMoraTemprana,
-        });
-      }
-  
-      console.log("🛑 Cerrando el túnel SSH...");
-      await closeTunnel();
-      console.log("✅ Túnel SSH cerrado correctamente.");
-  
-      return { message: "Datos obtenidos correctamente", data: finalResults };
-    } catch (error) {
-      console.error("❌ Error en getClientsFromTeledataService:", error.message);
-      throw new Error("Error interno al buscar la cédula en las bases de datos.");
+  setupKnexConnections,
+  closeTunnel,
+  getRequiroTest,
+  getRequiroMoratemprana,
+  getRequiroMultiple3,
+} = require("../db/stDb");
+
+const getDebtService = async (ci) => {
+  await setupKnexConnections();
+
+  try {
+    if (!ci) {
+      throw new Error("El campo ci está vacío o no es válido");
     }
-  };
-  
-  module.exports = getClientsFromTeledataService;
-  
+
+    // Obtener las conexiones a las 3 bases
+    const dbTest = getRequiroTest();
+    const dbMoraTemprana = getRequiroMoratemprana();
+    const dbMultiple3 = getRequiroMultiple3();
+
+    console.log(`🔍 Buscando CI: ${ci} en las 3 bases de datos...`);
+
+    // Se realizan las consultas sin .first() para obtener todos los registros
+    const [resultsTest, resultsMoraTemprana, resultsMultiple3] = await Promise.all([
+      dbTest("customer")
+        .leftJoin("customer_debt", "customer.id", "customer_debt.idCustomer")
+        .select(
+          "customer.*",
+          "customer_debt.*",
+        )
+        .where("customer.ci", ci),
+
+      dbMoraTemprana("customer")
+        .leftJoin("customer_debt", "customer.id", "customer_debt.idCustomer")
+        .select(
+          "customer.*",
+          "customer_debt.*",
+        )
+        .where("customer.ci", ci),
+
+      dbMultiple3("customer")
+        .leftJoin("customer_debt", "customer.id", "customer_debt.idCustomer")
+        .select(
+          "customer.*",
+          "customer_debt.*",
+        )
+        .where("customer.ci", ci),
+    ]);
+
+    // Combinar los resultados de las tres bases
+    const finalResults = [
+      ...resultsTest,
+      ...resultsMoraTemprana,
+      ...resultsMultiple3,
+    ];
+
+    console.log("🛑 Cerrando el túnel SSH...");
+    await closeTunnel();
+    console.log("✅ Túnel SSH cerrado correctamente.");
+
+    return {
+      message: "Datos de deuda obtenidos correctamente",
+      data: finalResults,
+    };
+  } catch (error) {
+    console.error("❌ Error en getDebtService:", error.message);
+    await closeTunnel();
+    throw new Error("Error interno al buscar la deuda en las bases de datos.");
+  }
+};
+
+module.exports = getDebtService;

@@ -1,5 +1,6 @@
-const getDebtService = require("../services/getCi.service");
-const getCiFromTeledataService = require("../services/getCi.service");
+
+const getCiService = require("../services/getCi.service");
+const getDebtService = require("../services/getDebt.service");
 
 const getCiFromTeledata = async (req, res) => {
   try {
@@ -11,7 +12,7 @@ const getCiFromTeledata = async (req, res) => {
         .json({ error: "El campo ci etsa vacio o no es valido" });
     }
 
-    const result = await getCiFromTeledataService(ci);
+    const result = await getCiService(ci);
 
     if(result.data.length === 0) {
       return res.status(400).json({ error: "No se encontraron registros" });
